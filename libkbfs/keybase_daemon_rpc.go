@@ -25,6 +25,8 @@ type KeybaseDaemonRPC struct {
 	// testing).
 	shutdownFn func()
 
+	keepAliveCancel context.CancelFunc
+
 	// protocols (additional to required protocols) to register on server connect
 	protocols []rpc.Protocol
 }
@@ -51,6 +53,11 @@ func NewKeybaseDaemonRPC(config Config, kbCtx Context, log logger.Logger, debug 
 	conn := NewSharedKeybaseConnection(kbCtx, config, k)
 	k.fillClients(conn.GetClient())
 	k.shutdownFn = conn.Shutdown
+
+	ctx, cancel := context.WithCancel(context.Background())
+	k.keepAliveCancel = cancel
+	go k.keepAliveLoop(ctx)
+
 	return k
 }
 
@@ -308,9 +315,35 @@ func (k *KeybaseDaemonRPC) ShouldRetryOnConnect(err error) bool {
 	return !inputCanceled
 }
 
+func (k *KeybaseDaemonRPC) keepAliveLoop(ctx context.Context) {
+	// We need to send another HelloIAm message as soon as the
+	// connection is re-established.  Unfortunately OnConnect() isn't
+	// called until KBFS makes another outgoing RPC, which might not
+	// happen for a while.  So continuously send a cheap RPC in the
+	// background, so that OnConnect will get called as soon as the
+	// connection comes back.
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			const sessionID = 0
+			_, err := k.sessionClient.CurrentSession(ctx, sessionID)
+			if err != nil && err.Error() != NoCurrentSessionExpectedError {
+				// Only log the error if it's not "no current session".
+				k.log.CDebugf(
+					ctx, "Background keep alive hit an error: %v", err)
+			}
+		}
+	}
+}
+
 // Shutdown implements the KeybaseService interface for KeybaseDaemonRPC.
 func (k *KeybaseDaemonRPC) Shutdown() {
 	if k.shutdownFn != nil {
 		k.shutdownFn()
 	}
+	k.keepAliveCancel()
 }
