@@ -164,39 +164,44 @@ func checkIBRMDRange(t *testing.T, uid keybase1.UID,
 }
 
 func TestMDJournalBasic(t *testing.T) {
-	codec, crypto, id, signer, ekg, bsplit, tempdir, j :=
-		setupMDJournalTest(t, defaultVer)
-	defer teardownMDJournalTest(t, tempdir)
+	for _, ver := range testMetadataVers {
+		ver := ver // capture range variable.
+		t.Run(ver.String(), func(t *testing.T) {
+			codec, crypto, id, signer, ekg, bsplit, tempdir, j :=
+				setupMDJournalTest(t, defaultVer)
+			defer teardownMDJournalTest(t, tempdir)
 
-	// Should start off as empty.
+			// Should start off as empty.
 
-	head, err := j.getHead()
-	require.NoError(t, err)
-	require.Equal(t, ImmutableBareRootMetadata{}, head)
-	require.Equal(t, 0, getMDJournalLength(t, j))
+			head, err := j.getHead()
+			require.NoError(t, err)
+			require.Equal(t, ImmutableBareRootMetadata{}, head)
+			require.Equal(t, 0, getMDJournalLength(t, j))
 
-	// Push some new metadata blocks.
+			// Push some new metadata blocks.
 
-	firstRevision := MetadataRevision(10)
-	firstPrevRoot := fakeMdID(1)
-	mdCount := 10
-	putMDRange(t, id, signer, ekg, bsplit,
-		firstRevision, firstPrevRoot, mdCount, j)
+			firstRevision := MetadataRevision(10)
+			firstPrevRoot := fakeMdID(1)
+			mdCount := 10
+			putMDRange(t, id, signer, ekg, bsplit,
+				firstRevision, firstPrevRoot, mdCount, j)
 
-	require.Equal(t, mdCount, getMDJournalLength(t, j))
+			require.Equal(t, mdCount, getMDJournalLength(t, j))
 
-	// Should now be non-empty.
-	ibrmds, err := j.getRange(
-		1, firstRevision+MetadataRevision(2*mdCount))
-	require.NoError(t, err)
-	require.Equal(t, mdCount, len(ibrmds))
+			// Should now be non-empty.
+			ibrmds, err := j.getRange(
+				1, firstRevision+MetadataRevision(2*mdCount))
+			require.NoError(t, err)
+			require.Equal(t, mdCount, len(ibrmds))
 
-	checkIBRMDRange(t, j.uid, j.key, codec, crypto,
-		ibrmds, firstRevision, firstPrevRoot, Merged, NullBranchID)
+			checkIBRMDRange(t, j.uid, j.key, codec, crypto,
+				ibrmds, firstRevision, firstPrevRoot, Merged, NullBranchID)
 
-	head, err = j.getHead()
-	require.NoError(t, err)
-	require.Equal(t, ibrmds[len(ibrmds)-1], head)
+			head, err = j.getHead()
+			require.NoError(t, err)
+			require.Equal(t, ibrmds[len(ibrmds)-1], head)
+		})
+	}
 }
 
 func TestMDJournalGetNextEntry(t *testing.T) {
