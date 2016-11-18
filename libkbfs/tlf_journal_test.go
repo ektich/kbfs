@@ -327,39 +327,41 @@ func TestTLFJournalBasic(t *testing.T) {
 	})
 }
 
-var defaultVer = defaultClientMetadataVer
-
 func TestTLFJournalPauseResume(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	tlfJournal.pauseBackgroundWork()
-	delegate.requireNextState(ctx, bwPaused)
+		tlfJournal.pauseBackgroundWork()
+		delegate.requireNextState(ctx, bwPaused)
 
-	putOneMD(ctx, config, tlfJournal)
+		putOneMD(ctx, config, tlfJournal)
 
-	// Unpause and wait for it to be processed.
+		// Unpause and wait for it to be processed.
 
-	tlfJournal.resumeBackgroundWork()
-	delegate.requireNextState(ctx, bwIdle)
-	delegate.requireNextState(ctx, bwBusy)
-	delegate.requireNextState(ctx, bwIdle)
+		tlfJournal.resumeBackgroundWork()
+		delegate.requireNextState(ctx, bwIdle)
+		delegate.requireNextState(ctx, bwBusy)
+		delegate.requireNextState(ctx, bwIdle)
+	})
 }
 
 func TestTLFJournalPauseShutdown(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	tlfJournal.pauseBackgroundWork()
-	delegate.requireNextState(ctx, bwPaused)
+		tlfJournal.pauseBackgroundWork()
+		delegate.requireNextState(ctx, bwPaused)
 
-	putOneMD(ctx, config, tlfJournal)
+		putOneMD(ctx, config, tlfJournal)
 
-	// Should still be able to shut down while paused.
+		// Should still be able to shut down while paused.
+	})
 }
 
 type hangingBlockServer struct {
@@ -394,74 +396,82 @@ func putBlock(ctx context.Context,
 }
 
 func TestTLFJournalBlockOpBasic(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
-	numFlushed, rev, err := tlfJournal.flushBlockEntries(ctx, 1)
-	require.NoError(t, err)
-	require.Equal(t, 1, numFlushed)
-	require.Equal(t, rev, MetadataRevisionUninitialized)
+		putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
+		numFlushed, rev, err := tlfJournal.flushBlockEntries(ctx, 1)
+		require.NoError(t, err)
+		require.Equal(t, 1, numFlushed)
+		require.Equal(t, rev, MetadataRevisionUninitialized)
+	})
 }
 
 func TestTLFJournalBlockOpBusyPause(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	bs := hangingBlockServer{tlfJournal.delegateBlockServer,
-		make(chan struct{})}
-	tlfJournal.delegateBlockServer = bs
+		bs := hangingBlockServer{tlfJournal.delegateBlockServer,
+			make(chan struct{})}
+		tlfJournal.delegateBlockServer = bs
 
-	putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
+		putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
 
-	bs.waitForPut(ctx, t)
-	delegate.requireNextState(ctx, bwBusy)
+		bs.waitForPut(ctx, t)
+		delegate.requireNextState(ctx, bwBusy)
 
-	// Should still be able to pause while busy.
+		// Should still be able to pause while busy.
 
-	tlfJournal.pauseBackgroundWork()
-	delegate.requireNextState(ctx, bwPaused)
+		tlfJournal.pauseBackgroundWork()
+		delegate.requireNextState(ctx, bwPaused)
+	})
 }
 
 func TestTLFJournalBlockOpBusyShutdown(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	bs := hangingBlockServer{tlfJournal.delegateBlockServer,
-		make(chan struct{})}
-	tlfJournal.delegateBlockServer = bs
+		bs := hangingBlockServer{tlfJournal.delegateBlockServer,
+			make(chan struct{})}
+		tlfJournal.delegateBlockServer = bs
 
-	putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
+		putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
 
-	bs.waitForPut(ctx, t)
-	delegate.requireNextState(ctx, bwBusy)
+		bs.waitForPut(ctx, t)
+		delegate.requireNextState(ctx, bwBusy)
 
-	// Should still be able to shut down while busy.
+		// Should still be able to shut down while busy.
+	})
 }
 
 func TestTLFJournalSecondBlockOpWhileBusy(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	bs := hangingBlockServer{tlfJournal.delegateBlockServer,
-		make(chan struct{})}
-	tlfJournal.delegateBlockServer = bs
+		bs := hangingBlockServer{tlfJournal.delegateBlockServer,
+			make(chan struct{})}
+		tlfJournal.delegateBlockServer = bs
 
-	putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
+		putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
 
-	bs.waitForPut(ctx, t)
-	delegate.requireNextState(ctx, bwBusy)
+		bs.waitForPut(ctx, t)
+		delegate.requireNextState(ctx, bwBusy)
 
-	// Should still be able to put a second block while busy.
-	putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4, 5})
+		// Should still be able to put a second block while busy.
+		putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4, 5})
+	})
 }
 
 type hangingMDServer struct {
@@ -487,64 +497,70 @@ func (md hangingMDServer) waitForPut(ctx context.Context, t *testing.T) {
 }
 
 func TestTLFJournalMDServerBusyPause(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	mdserver := hangingMDServer{config.MDServer(), make(chan struct{})}
-	config.mdserver = mdserver
+		mdserver := hangingMDServer{config.MDServer(), make(chan struct{})}
+		config.mdserver = mdserver
 
-	md := config.makeMD(MetadataRevisionInitial, MdID{})
-	_, err := tlfJournal.putMD(ctx, md)
-	require.NoError(t, err)
+		md := config.makeMD(MetadataRevisionInitial, MdID{})
+		_, err := tlfJournal.putMD(ctx, md)
+		require.NoError(t, err)
 
-	mdserver.waitForPut(ctx, t)
-	delegate.requireNextState(ctx, bwBusy)
+		mdserver.waitForPut(ctx, t)
+		delegate.requireNextState(ctx, bwBusy)
 
-	// Should still be able to pause while busy.
+		// Should still be able to pause while busy.
 
-	tlfJournal.pauseBackgroundWork()
-	delegate.requireNextState(ctx, bwPaused)
+		tlfJournal.pauseBackgroundWork()
+		delegate.requireNextState(ctx, bwPaused)
+	})
 }
 
 func TestTLFJournalMDServerBusyShutdown(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	mdserver := hangingMDServer{config.MDServer(), make(chan struct{})}
-	config.mdserver = mdserver
+		mdserver := hangingMDServer{config.MDServer(), make(chan struct{})}
+		config.mdserver = mdserver
 
-	md := config.makeMD(MetadataRevisionInitial, MdID{})
-	_, err := tlfJournal.putMD(ctx, md)
-	require.NoError(t, err)
+		md := config.makeMD(MetadataRevisionInitial, MdID{})
+		_, err := tlfJournal.putMD(ctx, md)
+		require.NoError(t, err)
 
-	mdserver.waitForPut(ctx, t)
-	delegate.requireNextState(ctx, bwBusy)
+		mdserver.waitForPut(ctx, t)
+		delegate.requireNextState(ctx, bwBusy)
 
-	// Should still be able to shutdown while busy.
+		// Should still be able to shutdown while busy.
+	})
 }
 
 func TestTLFJournalBlockOpWhileBusy(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkEnabled)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkEnabled)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	mdserver := hangingMDServer{config.MDServer(), make(chan struct{})}
-	config.mdserver = mdserver
+		mdserver := hangingMDServer{config.MDServer(), make(chan struct{})}
+		config.mdserver = mdserver
 
-	md := config.makeMD(MetadataRevisionInitial, MdID{})
-	_, err := tlfJournal.putMD(ctx, md)
-	require.NoError(t, err)
+		md := config.makeMD(MetadataRevisionInitial, MdID{})
+		_, err := tlfJournal.putMD(ctx, md)
+		require.NoError(t, err)
 
-	mdserver.waitForPut(ctx, t)
-	delegate.requireNextState(ctx, bwBusy)
+		mdserver.waitForPut(ctx, t)
+		delegate.requireNextState(ctx, bwBusy)
 
-	// Should still be able to put a block while busy.
-	putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
+		// Should still be able to put a block while busy.
+		putBlock(ctx, t, config, tlfJournal, []byte{1, 2, 3, 4})
+	})
 }
 
 type shimMDServer struct {
@@ -594,104 +610,108 @@ func requireJournalEntryCounts(t *testing.T, j *tlfJournal,
 // The tests below test tlfJournal's MD flushing behavior.
 
 func TestTLFJournalFlushMDBasic(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	firstRevision := MetadataRevision(10)
-	firstPrevRoot := fakeMdID(1)
-	mdCount := 10
+		firstRevision := MetadataRevision(10)
+		firstPrevRoot := fakeMdID(1)
+		mdCount := 10
 
-	prevRoot := firstPrevRoot
-	for i := 0; i < mdCount; i++ {
-		revision := firstRevision + MetadataRevision(i)
-		md := config.makeMD(revision, prevRoot)
-		mdID, err := tlfJournal.putMD(ctx, md)
+		prevRoot := firstPrevRoot
+		for i := 0; i < mdCount; i++ {
+			revision := firstRevision + MetadataRevision(i)
+			md := config.makeMD(revision, prevRoot)
+			mdID, err := tlfJournal.putMD(ctx, md)
+			require.NoError(t, err)
+			prevRoot = mdID
+		}
+
+		// Flush all entries.
+		var mdserver shimMDServer
+		config.mdserver = &mdserver
+
+		_, mdEnd, err := tlfJournal.getJournalEnds(ctx)
 		require.NoError(t, err)
-		prevRoot = mdID
-	}
 
-	// Flush all entries.
-	var mdserver shimMDServer
-	config.mdserver = &mdserver
-
-	_, mdEnd, err := tlfJournal.getJournalEnds(ctx)
-	require.NoError(t, err)
-
-	for i := 0; i < mdCount; i++ {
-		flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
-		require.NoError(t, err)
-		require.True(t, flushed)
-	}
-	flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
-	require.NoError(t, err)
-	require.False(t, flushed)
-	requireJournalEntryCounts(t, tlfJournal, uint64(mdCount), 0)
-	testMDJournalGCd(t, tlfJournal.mdJournal)
-
-	// Check RMDSes on the server.
-
-	rmdses := mdserver.rmdses
-	require.Equal(t, mdCount, len(rmdses))
-	config.checkRange(
-		rmdses, firstRevision, firstPrevRoot, Merged, NullBranchID)
-}
-
-func TestTLFJournalFlushMDConflict(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
-
-	firstRevision := MetadataRevision(10)
-	firstPrevRoot := fakeMdID(1)
-	mdCount := 10
-
-	prevRoot := firstPrevRoot
-	for i := 0; i < mdCount/2; i++ {
-		revision := firstRevision + MetadataRevision(i)
-		md := config.makeMD(revision, prevRoot)
-		mdID, err := tlfJournal.putMD(ctx, md)
-		require.NoError(t, err)
-		prevRoot = mdID
-	}
-
-	var mdserver shimMDServer
-	mdserver.nextErr = MDServerErrorConflictRevision{}
-	config.mdserver = &mdserver
-
-	_, mdEnd, err := tlfJournal.getJournalEnds(ctx)
-	require.NoError(t, err)
-
-	// Simulate a flush with a conflict error halfway through.
-	{
+		for i := 0; i < mdCount; i++ {
+			flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
+			require.NoError(t, err)
+			require.True(t, flushed)
+		}
 		flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
 		require.NoError(t, err)
 		require.False(t, flushed)
+		requireJournalEntryCounts(t, tlfJournal, uint64(mdCount), 0)
+		testMDJournalGCd(t, tlfJournal.mdJournal)
 
-		revision := firstRevision + MetadataRevision(mdCount/2)
-		md := config.makeMD(revision, prevRoot)
-		_, err = tlfJournal.putMD(ctx, md)
-		require.IsType(t, MDJournalConflictError{}, err)
+		// Check RMDSes on the server.
 
-		md.SetUnmerged()
-		mdID, err := tlfJournal.putMD(ctx, md)
+		rmdses := mdserver.rmdses
+		require.Equal(t, mdCount, len(rmdses))
+		config.checkRange(
+			rmdses, firstRevision, firstPrevRoot, Merged, NullBranchID)
+	})
+}
+
+func TestTLFJournalFlushMDConflict(t *testing.T) {
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
+
+		firstRevision := MetadataRevision(10)
+		firstPrevRoot := fakeMdID(1)
+		mdCount := 10
+
+		prevRoot := firstPrevRoot
+		for i := 0; i < mdCount/2; i++ {
+			revision := firstRevision + MetadataRevision(i)
+			md := config.makeMD(revision, prevRoot)
+			mdID, err := tlfJournal.putMD(ctx, md)
+			require.NoError(t, err)
+			prevRoot = mdID
+		}
+
+		var mdserver shimMDServer
+		mdserver.nextErr = MDServerErrorConflictRevision{}
+		config.mdserver = &mdserver
+
+		_, mdEnd, err := tlfJournal.getJournalEnds(ctx)
 		require.NoError(t, err)
-		prevRoot = mdID
-	}
 
-	for i := mdCount/2 + 1; i < mdCount; i++ {
-		revision := firstRevision + MetadataRevision(i)
-		md := config.makeMD(revision, prevRoot)
-		md.SetUnmerged()
-		mdID, err := tlfJournal.putMD(ctx, md)
-		require.NoError(t, err)
-		prevRoot = mdID
-	}
+		// Simulate a flush with a conflict error halfway through.
+		{
+			flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
+			require.NoError(t, err)
+			require.False(t, flushed)
 
-	// The journal won't flush anything while on a branch.
-	requireJournalEntryCounts(t, tlfJournal, uint64(mdCount), uint64(mdCount))
+			revision := firstRevision + MetadataRevision(mdCount/2)
+			md := config.makeMD(revision, prevRoot)
+			_, err = tlfJournal.putMD(ctx, md)
+			require.IsType(t, MDJournalConflictError{}, err)
+
+			md.SetUnmerged()
+			mdID, err := tlfJournal.putMD(ctx, md)
+			require.NoError(t, err)
+			prevRoot = mdID
+		}
+
+		for i := mdCount/2 + 1; i < mdCount; i++ {
+			revision := firstRevision + MetadataRevision(i)
+			md := config.makeMD(revision, prevRoot)
+			md.SetUnmerged()
+			mdID, err := tlfJournal.putMD(ctx, md)
+			require.NoError(t, err)
+			prevRoot = mdID
+		}
+
+		// The journal won't flush anything while on a branch.
+		requireJournalEntryCounts(t, tlfJournal, uint64(mdCount), uint64(mdCount))
+	})
 }
 
 // orderedBlockServer and orderedMDServer appends onto their shared
@@ -747,174 +767,178 @@ func (s *orderedMDServer) Shutdown() {
 // was added to the block journal before an MD op was added to the MD
 // journal, then that block op will be flushed before that MD op.
 func TestTLFJournalFlushOrdering(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	bid1, bCtx1, serverHalf1 := config.makeBlock([]byte{1})
-	bid2, bCtx2, serverHalf2 := config.makeBlock([]byte{2})
-	bid3, bCtx3, serverHalf3 := config.makeBlock([]byte{3})
+		bid1, bCtx1, serverHalf1 := config.makeBlock([]byte{1})
+		bid2, bCtx2, serverHalf2 := config.makeBlock([]byte{2})
+		bid3, bCtx3, serverHalf3 := config.makeBlock([]byte{3})
 
-	md1 := config.makeMD(MetadataRevision(10), fakeMdID(1))
+		md1 := config.makeMD(MetadataRevision(10), fakeMdID(1))
 
-	var lock sync.Mutex
-	var puts []interface{}
+		var lock sync.Mutex
+		var puts []interface{}
 
-	bserver := orderedBlockServer{
-		lock: &lock,
-		puts: &puts,
-	}
+		bserver := orderedBlockServer{
+			lock: &lock,
+			puts: &puts,
+		}
 
-	tlfJournal.delegateBlockServer.Shutdown()
-	tlfJournal.delegateBlockServer = &bserver
+		tlfJournal.delegateBlockServer.Shutdown()
+		tlfJournal.delegateBlockServer = &bserver
 
-	mdserver := orderedMDServer{
-		lock: &lock,
-		puts: &puts,
-	}
+		mdserver := orderedMDServer{
+			lock: &lock,
+			puts: &puts,
+		}
 
-	config.mdserver = &mdserver
+		config.mdserver = &mdserver
 
-	// bid1 is-put-before MetadataRevision(10).
-	err := tlfJournal.putBlockData(
-		ctx, bid1, bCtx1, []byte{1}, serverHalf1)
-	require.NoError(t, err)
-	prevRoot, err := tlfJournal.putMD(ctx, md1)
-	require.NoError(t, err)
-
-	bserver.onceOnPut = func() {
-		// bid2 is-put-before MetadataRevision(11).
+		// bid1 is-put-before MetadataRevision(10).
 		err := tlfJournal.putBlockData(
-			ctx, bid2, bCtx2, []byte{2}, serverHalf2)
+			ctx, bid1, bCtx1, []byte{1}, serverHalf1)
 		require.NoError(t, err)
-		md2 := config.makeMD(MetadataRevision(11), prevRoot)
-		prevRoot, err = tlfJournal.putMD(ctx, md2)
+		prevRoot, err := tlfJournal.putMD(ctx, md1)
 		require.NoError(t, err)
-	}
 
-	mdserver.onceOnPut = func() {
-		// bid3 is-put-before MetadataRevision(12).
-		err := tlfJournal.putBlockData(
-			ctx, bid3, bCtx3, []byte{3}, serverHalf3)
-		require.NoError(t, err)
-		md3 := config.makeMD(MetadataRevision(12), prevRoot)
-		prevRoot, err = tlfJournal.putMD(ctx, md3)
-		require.NoError(t, err)
-	}
+		bserver.onceOnPut = func() {
+			// bid2 is-put-before MetadataRevision(11).
+			err := tlfJournal.putBlockData(
+				ctx, bid2, bCtx2, []byte{2}, serverHalf2)
+			require.NoError(t, err)
+			md2 := config.makeMD(MetadataRevision(11), prevRoot)
+			prevRoot, err = tlfJournal.putMD(ctx, md2)
+			require.NoError(t, err)
+		}
 
-	err = tlfJournal.flush(ctx)
-	require.NoError(t, err)
-	requireJournalEntryCounts(t, tlfJournal, 0, 0)
-	testMDJournalGCd(t, tlfJournal.mdJournal)
+		mdserver.onceOnPut = func() {
+			// bid3 is-put-before MetadataRevision(12).
+			err := tlfJournal.putBlockData(
+				ctx, bid3, bCtx3, []byte{3}, serverHalf3)
+			require.NoError(t, err)
+			md3 := config.makeMD(MetadataRevision(12), prevRoot)
+			prevRoot, err = tlfJournal.putMD(ctx, md3)
+			require.NoError(t, err)
+		}
 
-	// These two orderings depend on the exact flushing process,
-	// but there are other possible orderings which respect the
-	// above is-put-before constraints and also respect the
-	// MetadataRevision ordering.
-	expectedPuts1 := []interface{}{
-		bid1, MetadataRevision(10), bid2, bid3,
-		MetadataRevision(11), MetadataRevision(12),
-	}
-	// This is possible since block puts are done in parallel.
-	expectedPuts2 := []interface{}{
-		bid1, MetadataRevision(10), bid3, bid2,
-		MetadataRevision(11), MetadataRevision(12),
-	}
-	require.True(t, reflect.DeepEqual(puts, expectedPuts1) ||
-		reflect.DeepEqual(puts, expectedPuts2),
-		"Expected %v or %v, got %v", expectedPuts1,
-		expectedPuts2, puts)
+		err = tlfJournal.flush(ctx)
+		require.NoError(t, err)
+		requireJournalEntryCounts(t, tlfJournal, 0, 0)
+		testMDJournalGCd(t, tlfJournal.mdJournal)
+
+		// These two orderings depend on the exact flushing process,
+		// but there are other possible orderings which respect the
+		// above is-put-before constraints and also respect the
+		// MetadataRevision ordering.
+		expectedPuts1 := []interface{}{
+			bid1, MetadataRevision(10), bid2, bid3,
+			MetadataRevision(11), MetadataRevision(12),
+		}
+		// This is possible since block puts are done in parallel.
+		expectedPuts2 := []interface{}{
+			bid1, MetadataRevision(10), bid3, bid2,
+			MetadataRevision(11), MetadataRevision(12),
+		}
+		require.True(t, reflect.DeepEqual(puts, expectedPuts1) ||
+			reflect.DeepEqual(puts, expectedPuts2),
+			"Expected %v or %v, got %v", expectedPuts1,
+			expectedPuts2, puts)
+	})
 }
 
 // TestTLFJournalFlushInterleaving tests that we interleave block and
 // MD ops while respecting the relative orderings of blocks and MD ops
 // when flushing.
 func TestTLFJournalFlushInterleaving(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	var lock sync.Mutex
-	var puts []interface{}
+		var lock sync.Mutex
+		var puts []interface{}
 
-	bserver := orderedBlockServer{
-		lock: &lock,
-		puts: &puts,
-	}
-
-	tlfJournal.delegateBlockServer.Shutdown()
-	tlfJournal.delegateBlockServer = &bserver
-
-	mdserver := orderedMDServer{
-		lock: &lock,
-		puts: &puts,
-	}
-
-	config.mdserver = &mdserver
-
-	// Revision 1
-	var bids []BlockID
-	rev1BlockEnd := maxJournalBlockFlushBatchSize * 2
-	for i := 0; i < rev1BlockEnd; i++ {
-		data := []byte{byte(i)}
-		bid, bCtx, serverHalf := config.makeBlock(data)
-		bids = append(bids, bid)
-		err := tlfJournal.putBlockData(ctx, bid, bCtx, data, serverHalf)
-		require.NoError(t, err)
-	}
-	md1 := config.makeMD(MetadataRevision(10), fakeMdID(1))
-	prevRoot, err := tlfJournal.putMD(ctx, md1)
-	require.NoError(t, err)
-
-	// Revision 2
-	rev2BlockEnd := rev1BlockEnd + maxJournalBlockFlushBatchSize*2
-	for i := rev1BlockEnd; i < rev2BlockEnd; i++ {
-		data := []byte{byte(i)}
-		bid, bCtx, serverHalf := config.makeBlock(data)
-		bids = append(bids, bid)
-		err := tlfJournal.putBlockData(ctx, bid, bCtx, data, serverHalf)
-		require.NoError(t, err)
-	}
-	md2 := config.makeMD(MetadataRevision(11), prevRoot)
-	prevRoot, err = tlfJournal.putMD(ctx, md2)
-	require.NoError(t, err)
-
-	err = tlfJournal.flush(ctx)
-	require.NoError(t, err)
-	requireJournalEntryCounts(t, tlfJournal, 0, 0)
-	testMDJournalGCd(t, tlfJournal.mdJournal)
-
-	// Make sure that: before revision 1, all the rev1 blocks were
-	// put; rev2 comes last; some blocks are put between the two.
-	bidsSeen := make(map[BlockID]bool)
-	md1Slot := 0
-	md2Slot := 0
-	for i, put := range puts {
-		if bid, ok := put.(BlockID); ok {
-			t.Logf("Saw bid %s at %d", bid, i)
-			bidsSeen[bid] = true
-			continue
+		bserver := orderedBlockServer{
+			lock: &lock,
+			puts: &puts,
 		}
 
-		mdID, ok := put.(MetadataRevision)
-		require.True(t, ok)
-		if mdID == md1.Revision() {
-			md1Slot = i
-			for j := 0; j < rev1BlockEnd; j++ {
-				t.Logf("Checking bid %s at %d", bids[j], i)
-				require.True(t, bidsSeen[bids[j]])
+		tlfJournal.delegateBlockServer.Shutdown()
+		tlfJournal.delegateBlockServer = &bserver
+
+		mdserver := orderedMDServer{
+			lock: &lock,
+			puts: &puts,
+		}
+
+		config.mdserver = &mdserver
+
+		// Revision 1
+		var bids []BlockID
+		rev1BlockEnd := maxJournalBlockFlushBatchSize * 2
+		for i := 0; i < rev1BlockEnd; i++ {
+			data := []byte{byte(i)}
+			bid, bCtx, serverHalf := config.makeBlock(data)
+			bids = append(bids, bid)
+			err := tlfJournal.putBlockData(ctx, bid, bCtx, data, serverHalf)
+			require.NoError(t, err)
+		}
+		md1 := config.makeMD(MetadataRevision(10), fakeMdID(1))
+		prevRoot, err := tlfJournal.putMD(ctx, md1)
+		require.NoError(t, err)
+
+		// Revision 2
+		rev2BlockEnd := rev1BlockEnd + maxJournalBlockFlushBatchSize*2
+		for i := rev1BlockEnd; i < rev2BlockEnd; i++ {
+			data := []byte{byte(i)}
+			bid, bCtx, serverHalf := config.makeBlock(data)
+			bids = append(bids, bid)
+			err := tlfJournal.putBlockData(ctx, bid, bCtx, data, serverHalf)
+			require.NoError(t, err)
+		}
+		md2 := config.makeMD(MetadataRevision(11), prevRoot)
+		prevRoot, err = tlfJournal.putMD(ctx, md2)
+		require.NoError(t, err)
+
+		err = tlfJournal.flush(ctx)
+		require.NoError(t, err)
+		requireJournalEntryCounts(t, tlfJournal, 0, 0)
+		testMDJournalGCd(t, tlfJournal.mdJournal)
+
+		// Make sure that: before revision 1, all the rev1 blocks were
+		// put; rev2 comes last; some blocks are put between the two.
+		bidsSeen := make(map[BlockID]bool)
+		md1Slot := 0
+		md2Slot := 0
+		for i, put := range puts {
+			if bid, ok := put.(BlockID); ok {
+				t.Logf("Saw bid %s at %d", bid, i)
+				bidsSeen[bid] = true
+				continue
 			}
-		} else if mdID == md2.Revision() {
-			md2Slot = i
-			require.NotZero(t, md1Slot)
-			require.True(t, md1Slot+1 < i)
-			require.Equal(t, i, len(puts)-1)
+
+			mdID, ok := put.(MetadataRevision)
+			require.True(t, ok)
+			if mdID == md1.Revision() {
+				md1Slot = i
+				for j := 0; j < rev1BlockEnd; j++ {
+					t.Logf("Checking bid %s at %d", bids[j], i)
+					require.True(t, bidsSeen[bids[j]])
+				}
+			} else if mdID == md2.Revision() {
+				md2Slot = i
+				require.NotZero(t, md1Slot)
+				require.True(t, md1Slot+1 < i)
+				require.Equal(t, i, len(puts)-1)
+			}
 		}
-	}
-	require.NotZero(t, md1Slot)
-	require.NotZero(t, md2Slot)
+		require.NotZero(t, md1Slot)
+		require.NotZero(t, md2Slot)
+	})
 }
 
 type testImmediateBackOff struct {
@@ -932,119 +956,123 @@ func (t *testImmediateBackOff) Reset() {
 }
 
 func TestTLFJournalFlushRetry(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	// Stop the current background loop; replace with one that retries
-	// immediately.
-	tlfJournal.needShutdownCh <- struct{}{}
-	<-tlfJournal.backgroundShutdownCh
-	resetCh := make(chan struct{})
-	b := &testImmediateBackOff{resetCh: resetCh}
-	tlfJournal.backgroundShutdownCh = make(chan struct{})
-	go tlfJournal.doBackgroundWorkLoop(TLFJournalBackgroundWorkPaused, b)
-	select {
-	case <-delegate.shutdownCh:
-	case <-ctx.Done():
-		assert.Fail(config.t, ctx.Err().Error())
-	}
+		// Stop the current background loop; replace with one that retries
+		// immediately.
+		tlfJournal.needShutdownCh <- struct{}{}
+		<-tlfJournal.backgroundShutdownCh
+		resetCh := make(chan struct{})
+		b := &testImmediateBackOff{resetCh: resetCh}
+		tlfJournal.backgroundShutdownCh = make(chan struct{})
+		go tlfJournal.doBackgroundWorkLoop(TLFJournalBackgroundWorkPaused, b)
+		select {
+		case <-delegate.shutdownCh:
+		case <-ctx.Done():
+			assert.Fail(config.t, ctx.Err().Error())
+		}
 
-	firstRevision := MetadataRevision(10)
-	firstPrevRoot := fakeMdID(1)
-	mdCount := 10
+		firstRevision := MetadataRevision(10)
+		firstPrevRoot := fakeMdID(1)
+		mdCount := 10
 
-	prevRoot := firstPrevRoot
-	for i := 0; i < mdCount; i++ {
-		revision := firstRevision + MetadataRevision(i)
-		md := config.makeMD(revision, prevRoot)
-		mdID, err := tlfJournal.putMD(ctx, md)
-		require.NoError(t, err)
-		prevRoot = mdID
-	}
+		prevRoot := firstPrevRoot
+		for i := 0; i < mdCount; i++ {
+			revision := firstRevision + MetadataRevision(i)
+			md := config.makeMD(revision, prevRoot)
+			mdID, err := tlfJournal.putMD(ctx, md)
+			require.NoError(t, err)
+			prevRoot = mdID
+		}
 
-	var mdserver shimMDServer
-	mdserver.nextErr = errors.New("Error to force a retry")
-	config.mdserver = &mdserver
+		var mdserver shimMDServer
+		mdserver.nextErr = errors.New("Error to force a retry")
+		config.mdserver = &mdserver
 
-	delegate.requireNextState(ctx, bwPaused)
-	tlfJournal.resumeBackgroundWork()
-	delegate.requireNextState(ctx, bwIdle)
-	delegate.requireNextState(ctx, bwBusy)
-	delegate.requireNextState(ctx, bwIdle)
-	delegate.requireNextState(ctx, bwBusy)
-	delegate.requireNextState(ctx, bwIdle)
-	<-resetCh
+		delegate.requireNextState(ctx, bwPaused)
+		tlfJournal.resumeBackgroundWork()
+		delegate.requireNextState(ctx, bwIdle)
+		delegate.requireNextState(ctx, bwBusy)
+		delegate.requireNextState(ctx, bwIdle)
+		delegate.requireNextState(ctx, bwBusy)
+		delegate.requireNextState(ctx, bwIdle)
+		<-resetCh
 
-	require.Equal(t, b.numBackOffs, 1)
-	requireJournalEntryCounts(t, tlfJournal, 0, 0)
-	testMDJournalGCd(t, tlfJournal.mdJournal)
+		require.Equal(t, b.numBackOffs, 1)
+		requireJournalEntryCounts(t, tlfJournal, 0, 0)
+		testMDJournalGCd(t, tlfJournal.mdJournal)
+	})
 }
 
 func TestTLFJournalResolveBranch(t *testing.T) {
-	tempdir, config, ctx, cancel, tlfJournal, delegate :=
-		setupTLFJournalTest(t, defaultVer, TLFJournalBackgroundWorkPaused)
-	defer teardownTLFJournalTest(
-		tempdir, config, ctx, cancel, tlfJournal, delegate)
+	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
+		tempdir, config, ctx, cancel, tlfJournal, delegate :=
+			setupTLFJournalTest(t, ver, TLFJournalBackgroundWorkPaused)
+		defer teardownTLFJournalTest(
+			tempdir, config, ctx, cancel, tlfJournal, delegate)
 
-	var bids []BlockID
-	for i := 0; i < 3; i++ {
-		data := []byte{byte(i)}
-		bid, bCtx, serverHalf := config.makeBlock(data)
-		bids = append(bids, bid)
-		err := tlfJournal.putBlockData(ctx, bid, bCtx, data, serverHalf)
+		var bids []BlockID
+		for i := 0; i < 3; i++ {
+			data := []byte{byte(i)}
+			bid, bCtx, serverHalf := config.makeBlock(data)
+			bids = append(bids, bid)
+			err := tlfJournal.putBlockData(ctx, bid, bCtx, data, serverHalf)
+			require.NoError(t, err)
+		}
+
+		firstRevision := MetadataRevision(10)
+		firstPrevRoot := fakeMdID(1)
+		mdCount := 3
+
+		prevRoot := firstPrevRoot
+		for i := 0; i < mdCount; i++ {
+			revision := firstRevision + MetadataRevision(i)
+			md := config.makeMD(revision, prevRoot)
+			mdID, err := tlfJournal.putMD(ctx, md)
+			require.NoError(t, err)
+			prevRoot = mdID
+		}
+
+		var mdserver shimMDServer
+		mdserver.nextErr = MDServerErrorConflictRevision{}
+		config.mdserver = &mdserver
+
+		_, mdEnd, err := tlfJournal.getJournalEnds(ctx)
 		require.NoError(t, err)
-	}
 
-	firstRevision := MetadataRevision(10)
-	firstPrevRoot := fakeMdID(1)
-	mdCount := 3
-
-	prevRoot := firstPrevRoot
-	for i := 0; i < mdCount; i++ {
-		revision := firstRevision + MetadataRevision(i)
-		md := config.makeMD(revision, prevRoot)
-		mdID, err := tlfJournal.putMD(ctx, md)
+		// This will convert to a branch.
+		flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
 		require.NoError(t, err)
-		prevRoot = mdID
-	}
+		require.False(t, flushed)
 
-	var mdserver shimMDServer
-	mdserver.nextErr = MDServerErrorConflictRevision{}
-	config.mdserver = &mdserver
+		// Resolve the branch.
+		resolveMD := config.makeMD(firstRevision, firstPrevRoot)
+		_, err = tlfJournal.resolveBranch(ctx,
+			tlfJournal.mdJournal.getBranchID(), []BlockID{bids[1]}, resolveMD, nil)
+		require.NoError(t, err)
 
-	_, mdEnd, err := tlfJournal.getJournalEnds(ctx)
-	require.NoError(t, err)
+		blockEnd, newMDEnd, err := tlfJournal.getJournalEnds(ctx)
+		require.NoError(t, err)
+		require.Equal(t, firstRevision+1, newMDEnd)
 
-	// This will convert to a branch.
-	flushed, err := tlfJournal.flushOneMDOp(ctx, mdEnd, mdEnd)
-	require.NoError(t, err)
-	require.False(t, flushed)
+		blocks, maxMD, err := tlfJournal.getNextBlockEntriesToFlush(ctx, blockEnd)
+		require.NoError(t, err)
+		require.Equal(t, firstRevision, maxMD)
+		// 3 blocks, 3 old MD markers, 1 new MD marker
+		require.Equal(t, 7, blocks.length())
+		require.Len(t, blocks.puts.blockStates, 2)
+		require.Len(t, blocks.adds.blockStates, 0)
+		// 1 ignored block, 3 ignored MD markers, 1 real MD marker
+		require.Len(t, blocks.other, 5)
+		require.Equal(t, bids[0], blocks.puts.blockStates[0].blockPtr.ID)
+		require.Equal(t, bids[2], blocks.puts.blockStates[1].blockPtr.ID)
 
-	// Resolve the branch.
-	resolveMD := config.makeMD(firstRevision, firstPrevRoot)
-	_, err = tlfJournal.resolveBranch(ctx,
-		tlfJournal.mdJournal.getBranchID(), []BlockID{bids[1]}, resolveMD, nil)
-	require.NoError(t, err)
-
-	blockEnd, newMDEnd, err := tlfJournal.getJournalEnds(ctx)
-	require.NoError(t, err)
-	require.Equal(t, firstRevision+1, newMDEnd)
-
-	blocks, maxMD, err := tlfJournal.getNextBlockEntriesToFlush(ctx, blockEnd)
-	require.NoError(t, err)
-	require.Equal(t, firstRevision, maxMD)
-	// 3 blocks, 3 old MD markers, 1 new MD marker
-	require.Equal(t, 7, blocks.length())
-	require.Len(t, blocks.puts.blockStates, 2)
-	require.Len(t, blocks.adds.blockStates, 0)
-	// 1 ignored block, 3 ignored MD markers, 1 real MD marker
-	require.Len(t, blocks.other, 5)
-	require.Equal(t, bids[0], blocks.puts.blockStates[0].blockPtr.ID)
-	require.Equal(t, bids[2], blocks.puts.blockStates[1].blockPtr.ID)
-
-	// resolveBranch resumes background work.
-	delegate.requireNextState(ctx, bwIdle)
-	delegate.requireNextState(ctx, bwBusy)
+		// resolveBranch resumes background work.
+		delegate.requireNextState(ctx, bwIdle)
+		delegate.requireNextState(ctx, bwBusy)
+	})
 }
