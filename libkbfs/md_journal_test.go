@@ -162,6 +162,8 @@ func checkIBRMDRange(t *testing.T, uid keybase1.UID,
 	}
 }
 
+// TODO: Test with all possible (ver, maxVer) combos
+
 func TestMDJournalBasic(t *testing.T) {
 	RunTestOverMetadataVers(t, func(t *testing.T, ver MetadataVer) {
 		codec, crypto, id, signer, ekg, bsplit, tempdir, j :=
