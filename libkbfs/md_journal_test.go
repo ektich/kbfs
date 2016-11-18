@@ -74,8 +74,9 @@ func setupMDJournalTest(t *testing.T) (
 	}()
 
 	log := logger.NewTestLogger(t)
+	ver := defaultClientMetadataVer
 	j, err = makeMDJournal(uid, verifyingKey, codec, crypto, wallClock{},
-		tlfID, defaultClientMetadataVer, tempdir, log)
+		tlfID, ver, tempdir, log)
 	require.NoError(t, err)
 
 	bsplit = &BlockSplitterSimple{64 * 1024, 8 * 1024}
