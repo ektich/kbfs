@@ -74,7 +74,7 @@ func setupMDJournalTest(t *testing.T) (
 	}()
 
 	log := logger.NewTestLogger(t)
-	ver := defaultClientMetadataVer
+	ver := SegregatedKeyBundlesVer
 	j, err = makeMDJournal(uid, verifyingKey, codec, crypto, wallClock{},
 		tlfID, ver, tempdir, log)
 	require.NoError(t, err)
